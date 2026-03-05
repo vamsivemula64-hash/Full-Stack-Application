@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Student FullStack System</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:linear-gradient(to right,#2193b0,#6dd5ed);
+}
+
+.login-box{
+width:350px;
+background:white;
+padding:30px;
+margin:100px auto;
+border-radius:10px;
+box-shadow:0 0 15px black;
+}
+
+input,select,button{
+width:100%;
+padding:10px;
+margin:8px 0;
+}
+
+button{
+background:#2196F3;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+#error{
+color:red;
+text-align:center;
+}
+
+.container{
+display:none;
+background:white;
+padding:20px;
+max-width:1000px;
+margin:30px auto;
+border-radius:10px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#2196F3;
+color:white;
+}
+
+.stats{
+margin:10px 0;
+font-weight:bold;
+}
+
+.top{
+display:flex;
+justify-content:space-between;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+
+<div class="login-box" id="login">
+
+<h2 align="center">Login</h2>
+
+<input id="lemail" placeholder="Email">
+<input type="password" id="lpass" placeholder="Password">
+
+<div id="error"></div>
+
+<button onclick="login()">Login</button>
+
+</div>
+
+<!-- DASHBOARD -->
+
+<div class="container" id="dash">
+
+<div class="top">
+<h2>Student Dashboard</h2>
+<button onclick="logout()">Logout</button>
+</div>
+
+<h3>Add Student</h3>
+
+<input id="name" placeholder="Name">
+<input id="email" placeholder="Email">
+<input type="date" id="dob">
+
+<select id="dept">
+<option>CSE</option>
+<option>ECE</option>
+<option>EEE</option>
+<option>MECH</option>
+</select>
+
+<input id="phone" placeholder="Phone">
+
+<button onclick="addStudent()">Register</button>
+
+<hr>
+
+Sort:
+<button onclick="sortName()">Name</button>
+<button onclick="sortDOB()">DOB</button>
+
+Filter:
+<select id="filter" onchange="render()">
+<option value="">All</option>
+<option>CSE</option>
+<option>ECE</option>
+<option>EEE</option>
+<option>MECH</option>
+</select>
+
+<div class="stats" id="stats"></div>
+
+<table>
+<thead>
+<tr>
+<th>ID</th><th>Name</th><th>Email</th><th>DOB</th><th>Dept</th><th>Phone</th>
+</tr>
+</thead>
+<tbody id="data"></tbody>
+</table>
+
+</div>
+
+<script>
+
+let db,students=[];
+
+// DB
+let req=indexedDB.open("FullStackDB",1);
+
+req.onupgradeneeded=e=>{
+db=e.target.result;
+
+db.createObjectStore("users",{keyPath:"email"});
+db.createObjectStore("students",{keyPath:"id",autoIncrement:true});
+
+// default admin
+e.target.result.transaction("users","readwrite")
+.objectStore("users")
+.add({email:"admin@gmail.com",password:"admin123"});
+};
+
+req.onsuccess=e=>{
+db=e.target.result;
+};
+
+// LOGIN
+function login(){
+
+let email=lemail.value;
+let pass=lpass.value;
+
+if(email==""||pass==""){
+error.innerText="Fill all fields";
+return;
+}
+
+let tx=db.transaction("users","readonly");
+let store=tx.objectStore("users");
+
+store.get(email).onsuccess=e=>{
+let user=e.target.result;
+
+if(!user || user.password!=pass){
+error.innerText="Invalid Credentials";
+}else{
+login.style.display="none";
+dash.style.display="block";
+loadStudents();
+}
+}
+}
+
+// LOGOUT
+function logout(){
+location.reload();
+}
+
+// ADD STUDENT
+function addStudent(){
+
+let tx=db.transaction("students","readwrite");
+tx.objectStore("students").add({
+name:name.value,
+email:email.value,
+dob:dob.value,
+dept:dept.value,
+phone:phone.value
+});
+
+tx.oncomplete=loadStudents;
+}
+
+// LOAD
+function loadStudents(){
+students=[];
+let tx=db.transaction("students","readonly");
+tx.objectStore("students").openCursor().onsuccess=e=>{
+let cur=e.target.result;
+if(cur){
+students.push({...cur.value,id:cur.key});
+cur.continue();
+}else render();
+}
+}
+
+// RENDER
+function render(){
+
+let f=filter.value;
+let out="";
+let c={CSE:0,ECE:0,EEE:0,MECH:0};
+
+students.forEach(s=>{
+c[s.dept]++;
+if(f==""||f==s.dept){
+out+=`<tr>
+<td>${s.id}</td><td>${s.name}</td><td>${s.email}</td>
+<td>${s.dob}</td><td>${s.dept}</td><td>${s.phone}</td></tr>`;
+}
+});
+
+data.innerHTML=out;
+stats.innerHTML=`CSE:${c.CSE} | ECE:${c.ECE} | EEE:${c.EEE} | MECH:${c.MECH}`;
+}
+
+// SORT
+function sortName(){
+students.sort((a,b)=>a.name.localeCompare(b.name));
+render();
+}
+
+function sortDOB(){
+students.sort((a,b)=>new Date(a.dob)-new Date(b.dob));
+render();
+}
+
+</script>
+
+</body>
+</html>

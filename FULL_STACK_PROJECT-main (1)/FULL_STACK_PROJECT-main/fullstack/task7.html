@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Interactive Feedback Form</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:linear-gradient(to right,#667eea,#764ba2);
+}
+
+.container{
+width:400px;
+background:white;
+margin:80px auto;
+padding:25px;
+border-radius:12px;
+box-shadow:0 0 15px #000;
+}
+
+h2{text-align:center}
+
+input,textarea{
+width:100%;
+padding:10px;
+margin:8px 0;
+border:2px solid #ccc;
+border-radius:6px;
+outline:none;
+transition:.3s;
+}
+
+input:hover,textarea:hover{
+border-color:#2196F3;
+background:#f4f9ff;
+}
+
+button{
+width:100%;
+padding:12px;
+background:#2196F3;
+color:white;
+border:none;
+border-radius:6px;
+cursor:pointer;
+font-size:16px;
+}
+
+.error{
+color:red;
+font-size:13px;
+}
+
+.success{
+color:green;
+text-align:center;
+margin-top:10px;
+font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Customer Feedback</h2>
+
+<label>Name</label>
+<input id="name" oninput="validateName()">
+<div id="nameErr" class="error"></div>
+
+<label>Email</label>
+<input id="email" oninput="validateEmail()">
+<div id="emailErr" class="error"></div>
+
+<label>Rating (1–5)</label>
+<input id="rating" onkeypress="return onlyNumber(event)" oninput="validateRating()">
+<div id="rateErr" class="error"></div>
+
+<label>Feedback</label>
+<textarea id="msg" rows="4" oninput="validateMsg()"></textarea>
+<div id="msgErr" class="error"></div>
+
+<button ondblclick="submitForm()">Double-Click Submit</button>
+
+<div id="result" class="success"></div>
+
+</div>
+
+<script>
+
+// ===== Reusable Validation Functions =====
+
+function validateName(){
+if(name.value.length<3){
+nameErr.innerText="Minimum 3 characters";
+return false;
+}
+nameErr.innerText="";
+return true;
+}
+
+function validateEmail(){
+let re=/^\S+@\S+\.\S+$/;
+if(!re.test(email.value)){
+emailErr.innerText="Invalid Email";
+return false;
+}
+emailErr.innerText="";
+return true;
+}
+
+function validateRating(){
+let r=parseInt(rating.value);
+if(r<1||r>5){
+rateErr.innerText="Rating must be 1 to 5";
+return false;
+}
+rateErr.innerText="";
+return true;
+}
+
+function validateMsg(){
+if(msg.value.length<10){
+msgErr.innerText="Minimum 10 characters";
+return false;
+}
+msgErr.innerText="";
+return true;
+}
+
+// Allow only numbers
+function onlyNumber(e){
+return e.charCode>=48 && e.charCode<=57;
+}
+
+// ===== Double Click Submit =====
+
+function submitForm(){
+
+if(validateName() & validateEmail() & validateRating() & validateMsg()){
+
+if(confirm("Submit Feedback?")){
+
+result.innerHTML="✅ Thank you for your feedback!";
+
+name.value="";
+email.value="";
+rating.value="";
+msg.value="";
+}
+
+}else{
+alert("Fix validation errors");
+}
+}
+
+</script>
+
+</body>
+</html>

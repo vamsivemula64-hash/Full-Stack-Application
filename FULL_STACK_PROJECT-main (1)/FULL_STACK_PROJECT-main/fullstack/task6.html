@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Enterprise Order System</title>
+
+<style>
+body{font-family:Arial;background:#eef2f5;margin:0}
+header{background:#000;color:white;padding:15px;text-align:center;font-size:22px}
+.container{max-width:1200px;margin:auto;padding:20px}
+
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+.card{background:white;padding:10px;border-radius:10px;box-shadow:0 0 6px #aaa;text-align:center}
+
+button{background:#2196F3;color:white;border:none;padding:8px 12px;border-radius:5px}
+
+table{width:100%;border-collapse:collapse;background:white;margin-top:15px}
+th,td{border:1px solid #ccc;padding:8px;text-align:center}
+th{background:#2196F3;color:white}
+
+.box{background:white;padding:15px;margin-top:20px;border-radius:10px;box-shadow:0 0 6px #aaa}
+</style>
+</head>
+
+<body>
+
+<header>Enterprise Order + Payment + Audit System</header>
+
+<div class="container">
+
+<h3>Products</h3>
+<div class="products" id="products"></div>
+
+Customer:
+<select id="customer">
+<option>Alice</option>
+<option>Bob</option>
+</select>
+
+Product:
+<select id="productSelect"></select>
+
+Qty:
+<input type="number" id="qty" value="1">
+
+<button onclick="addOrder()">Add Order</button>
+
+<table>
+<thead>
+<tr><th>Customer</th><th>Product</th><th>Total</th></tr>
+</thead>
+<tbody id="orders"></tbody>
+</table>
+
+<div class="box">
+User Balance: ₹<span id="uBal"></span> |
+Merchant Balance: ₹<span id="mBal"></span><br><br>
+<button onclick="pay()">Pay (Transaction)</button>
+<div id="msg"></div>
+</div>
+
+<div class="box">
+<h3>Audit Logs (Trigger)</h3>
+<table>
+<thead><tr><th>Action</th><th>Details</th><th>Date</th></tr></thead>
+<tbody id="logs"></tbody>
+</table>
+</div>
+
+<div class="box">
+<h3>Daily Activity View</h3>
+<table>
+<thead><tr><th>Date</th><th>Operations</th></tr></thead>
+<tbody id="view"></tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+
+let db,products=[],orders=[],logs=[];
+let userBal=5000,merBal=0;
+
+let req=indexedDB.open("EnterpriseDB",1);
+
+req.onupgradeneeded=e=>{
+db=e.target.result;
+db.createObjectStore("products",{keyPath:"id",autoIncrement:true});
+db.createObjectStore("orders",{keyPath:"id",autoIncrement:true});
+db.createObjectStore("audit",{keyPath:"id",autoIncrement:true});
+};
+
+req.onsuccess=e=>{
+db=e.target.result;
+seed();
+updateBal();
+}
+
+// AUTO PRODUCTS
+function seed(){
+let tx=db.transaction("products","readwrite");
+let s=tx.objectStore("products");
+
+s.count().onsuccess=e=>{
+if(e.target.result==0){
+[
+{name:"Laptop",price:600},
+{name:"Phone",price:300},
+{name:"Watch",price:150}
+].forEach(p=>s.add(p));
+}
+}
+tx.oncomplete=loadProducts;
+}
+
+// LOAD PRODUCTS
+function loadProducts(){
+products=[];
+db.transaction("products").objectStore("products").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){products.push({...c.value,id:c.key});c.continue();}
+else renderProducts();
+}
+}
+
+function renderProducts(){
+productsDiv.innerHTML="";
+productSelect.innerHTML="";
+products.forEach(p=>{
+productsDiv.innerHTML+=`<div class="card">${p.name}<br>₹${p.price}</div>`;
+productSelect.innerHTML+=`<option value="${p.id}">${p.name}</option>`;
+});
+}
+
+// ===== TRIGGER FUNCTION =====
+function trigger(action,detail){
+
+let today=new Date().toLocaleDateString();
+
+db.transaction("audit","readwrite")
+.objectStore("audit")
+.add({action,detail,date:today});
+
+loadLogs();
+}
+
+// ADD ORDER (INSERT trigger)
+function addOrder(){
+
+let p=products.find(x=>x.id==productSelect.value);
+let total=p.price*qty.value;
+
+db.transaction("orders","readwrite")
+.objectStore("orders")
+.add({customer:customer.value,product:p.name,total});
+
+trigger("INSERT","Order Added");
+
+loadOrders();
+}
+
+// LOAD ORDERS
+function loadOrders(){
+orders=[];
+db.transaction("orders").objectStore("orders").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){orders.push(c.value);c.continue();}
+else renderOrders();
+}
+}
+
+function renderOrders(){
+let html="";
+orders.forEach(o=>{
+html+=`<tr><td>${o.customer}</td><td>${o.product}</td><td>${o.total}</td></tr>`;
+});
+document.getElementById("orders").innerHTML=html;
+}
+
+// PAYMENT TRANSACTION
+function pay(){
+
+let amount=orders.reduce((a,b)=>a+b.total,0);
+
+let temp=userBal-amount;
+
+if(temp<0){
+msg.innerHTML="ROLLBACK – Insufficient Balance";
+return;
+}
+
+// COMMIT
+userBal=temp;
+merBal+=amount;
+
+db.transaction("orders","readwrite").objectStore("orders").clear();
+orders=[];
+
+trigger("UPDATE","Payment COMMIT");
+
+msg.innerHTML="COMMIT – Payment Success";
+updateBal();
+loadOrders();
+}
+
+// LOAD LOGS
+function loadLogs(){
+logs=[];
+db.transaction("audit").objectStore("audit").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){logs.push(c.value);c.continue();}
+else renderLogs();
+}
+}
+
+// SHOW LOGS + VIEW
+function renderLogs(){
+
+let html="";
+let daily={};
+
+logs.forEach(l=>{
+html+=`<tr><td>${l.action}</td><td>${l.detail}</td><td>${l.date}</td></tr>`;
+daily[l.date]=(daily[l.date]||0)+1;
+});
+
+document.getElementById("logs").innerHTML=html;
+
+// VIEW (Daily Activity)
+let v="";
+Object.keys(daily).forEach(d=>{
+v+=`<tr><td>${d}</td><td>${daily[d]}</td></tr>`;
+});
+
+document.getElementById("view").innerHTML=v;
+}
+
+function updateBal(){
+uBal.innerText=userBal;
+mBal.innerText=merBal;
+}
+
+</script>
+
+</body>
+</html>

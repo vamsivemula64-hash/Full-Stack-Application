@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>E-Commerce Payment System</title>
+
+<style>
+body{font-family:Arial;background:#eef2f5;margin:0}
+header{background:#111;color:white;padding:15px;text-align:center;font-size:22px}
+.container{max-width:1200px;margin:auto;padding:20px}
+
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+.card{background:white;padding:10px;border-radius:10px;box-shadow:0 0 6px #aaa;text-align:center}
+.card img{width:100%;height:140px;border-radius:8px}
+
+button{background:#2196F3;color:white;border:none;padding:8px 12px;border-radius:5px;cursor:pointer}
+select,input{padding:6px;margin:5px}
+
+table{width:100%;border-collapse:collapse;background:white;margin-top:15px}
+th,td{border:1px solid #ccc;padding:8px;text-align:center}
+th{background:#2196F3;color:white}
+
+.stats{display:flex;justify-content:space-around;background:white;padding:10px;margin-top:20px;border-radius:10px}
+
+.paybox{background:white;padding:15px;margin-top:20px;border-radius:10px;box-shadow:0 0 6px #aaa;text-align:center}
+</style>
+</head>
+
+<body>
+
+<header>Mini E-Commerce + Payment Transaction</header>
+
+<div class="container">
+
+<h3>Products</h3>
+<div class="products" id="products"></div>
+
+<hr>
+
+Customer:
+<select id="customer">
+<option>Alice</option>
+<option>Bob</option>
+</select>
+
+Product:
+<select id="productSelect"></select>
+
+Qty:
+<input type="number" id="qty" value="1">
+
+<button onclick="placeOrder()">Add Order</button>
+
+<table>
+<thead>
+<tr><th>Customer</th><th>Product</th><th>Total</th></tr>
+</thead>
+<tbody id="orders"></tbody>
+</table>
+
+<div class="stats" id="stats"></div>
+
+<div class="paybox">
+<h3>💳 Payment Simulation</h3>
+
+User Balance: ₹<span id="userBal"></span><br>
+Merchant Balance: ₹<span id="merBal"></span><br><br>
+
+<button onclick="pay()">Pay All Orders</button>
+
+<div id="msg"></div>
+</div>
+
+</div>
+
+<script>
+
+let db,products=[],orders=[],userBal=5000,merBal=0;
+
+// SVG images
+function img(t){
+return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><rect width='300' height='200' fill='%23"+Math.floor(Math.random()*999)+"'/><text x='50%' y='50%' fill='white' font-size='24' text-anchor='middle'>"+t+"</text></svg>";
+}
+
+// DB
+let req=indexedDB.open("PayDB",1);
+
+req.onupgradeneeded=e=>{
+db=e.target.result;
+db.createObjectStore("products",{keyPath:"id",autoIncrement:true});
+db.createObjectStore("orders",{keyPath:"id",autoIncrement:true});
+};
+
+req.onsuccess=e=>{
+db=e.target.result;
+seed();
+updateBal();
+}
+
+// PRODUCTS
+function seed(){
+
+let tx=db.transaction("products","readwrite");
+let s=tx.objectStore("products");
+
+s.count().onsuccess=e=>{
+if(e.target.result==0){
+[
+{name:"Laptop",price:600,img:img("Laptop")},
+{name:"Phone",price:300,img:img("Phone")},
+{name:"Watch",price:150,img:img("Watch")}
+].forEach(p=>s.add(p));
+}
+}
+
+tx.oncomplete=loadProducts;
+}
+
+// LOAD PRODUCTS
+function loadProducts(){
+products=[];
+db.transaction("products").objectStore("products").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){products.push({...c.value,id:c.key});c.continue();}
+else renderProducts();
+}
+}
+
+// DISPLAY
+function renderProducts(){
+productsDiv.innerHTML="";
+productSelect.innerHTML="";
+products.forEach(p=>{
+productsDiv.innerHTML+=`
+<div class="card">
+<img src="${p.img}">
+<h4>${p.name}</h4>₹${p.price}
+</div>`;
+productSelect.innerHTML+=`<option value="${p.id}">${p.name}</option>`;
+});
+}
+
+// ORDER
+function placeOrder(){
+
+let p=products.find(x=>x.id==productSelect.value);
+
+db.transaction("orders","readwrite")
+.objectStore("orders")
+.add({customer:customer.value,product:p.name,total:p.price*qty.value});
+
+loadOrders();
+}
+
+// LOAD ORDERS
+function loadOrders(){
+orders=[];
+db.transaction("orders").objectStore("orders").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){orders.push(c.value);c.continue();}
+else renderOrders();
+}
+}
+
+// JOIN
+function renderOrders(){
+
+let html="",sum=0;
+orders.forEach(o=>{
+html+=`<tr><td>${o.customer}</td><td>${o.product}</td><td>${o.total}</td></tr>`;
+sum+=o.total;
+});
+
+document.getElementById("orders").innerHTML=html;
+stats.innerHTML="Total Bill: ₹"+sum;
+}
+
+// PAYMENT TRANSACTION
+function pay(){
+
+let amount=orders.reduce((a,b)=>a+b.total,0);
+
+msg.innerHTML="Processing...";
+
+setTimeout(()=>{
+
+// BEGIN TRANSACTION
+let tempUser=userBal;
+let tempMer=merBal;
+
+// Deduct
+tempUser-=amount;
+
+if(tempUser<0){
+
+// ROLLBACK
+msg.innerHTML="❌ Payment Failed – Insufficient Balance (ROLLBACK)";
+return;
+
+}else{
+
+// COMMIT
+userBal=tempUser;
+merBal+=amount;
+
+orders=[];
+db.transaction("orders","readwrite").objectStore("orders").clear();
+
+msg.innerHTML="✅ Payment Successful (COMMIT)";
+updateBal();
+loadOrders();
+}
+
+},800);
+}
+
+function updateBal(){
+userBalSpan.innerText=userBal;
+merBalSpan.innerText=merBal;
+}
+
+userBalSpan=document.getElementById("userBal");
+merBalSpan=document.getElementById("merBal");
+
+</script>
+
+</body>
+</html>

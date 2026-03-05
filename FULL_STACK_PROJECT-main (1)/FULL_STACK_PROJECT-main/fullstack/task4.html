@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>E-Commerce Order System</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#f4f6f9;
+}
+
+header{
+background:#111;
+color:white;
+padding:15px;
+text-align:center;
+font-size:22px;
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+padding:20px;
+}
+
+.products{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+gap:15px;
+}
+
+.card{
+background:white;
+padding:15px;
+border-radius:10px;
+box-shadow:0 0 8px #ccc;
+text-align:center;
+}
+
+.card img{
+width:100%;
+height:140px;
+object-fit:cover;
+border-radius:8px;
+}
+
+button{
+padding:8px 12px;
+background:#2196F3;
+color:white;
+border:none;
+cursor:pointer;
+border-radius:5px;
+}
+
+select,input{
+padding:6px;
+margin:5px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:15px;
+background:white;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#2196F3;
+color:white;
+}
+
+.stats{
+display:flex;
+justify-content:space-around;
+background:white;
+padding:10px;
+margin-top:20px;
+border-radius:10px;
+box-shadow:0 0 6px #ccc;
+font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<header>Mini E-Commerce Order Management</header>
+
+<div class="container">
+
+<h3>🛍 Products</h3>
+
+<div class="products" id="products"></div>
+
+<hr>
+
+<h3>📦 Place Order</h3>
+
+Customer:
+<select id="customer">
+<option>Alice</option>
+<option>Bob</option>
+<option>Charlie</option>
+</select>
+
+Product:
+<select id="productSelect"></select>
+
+Qty:
+<input type="number" id="qty" value="1" min="1">
+
+<button onclick="placeOrder()">Order</button>
+
+<hr>
+
+<h3>📄 Order History (JOIN Customers + Orders + Products)</h3>
+
+<table>
+<thead>
+<tr>
+<th>Customer</th>
+<th>Product</th>
+<th>Price</th>
+<th>Qty</th>
+<th>Total</th>
+</tr>
+</thead>
+<tbody id="orders"></tbody>
+</table>
+
+<div class="stats" id="stats"></div>
+
+</div>
+
+<script>
+
+let db,products=[],orders=[];
+
+// SVG product images (auto generated)
+function img(text){
+return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><rect width='300' height='200' fill='%23"+Math.floor(Math.random()*999)+"'/><text x='50%' y='50%' font-size='24' fill='white' text-anchor='middle'>"+text+"</text></svg>";
+}
+
+// DB
+let req=indexedDB.open("ShopDB",1);
+
+req.onupgradeneeded=e=>{
+db=e.target.result;
+db.createObjectStore("products",{keyPath:"id",autoIncrement:true});
+db.createObjectStore("orders",{keyPath:"id",autoIncrement:true});
+};
+
+req.onsuccess=e=>{
+db=e.target.result;
+seedProducts();
+}
+
+// SEED PRODUCTS
+function seedProducts(){
+
+let tx=db.transaction("products","readwrite");
+let store=tx.objectStore("products");
+
+store.count().onsuccess=e=>{
+if(e.target.result==0){
+[
+{name:"Laptop",price:600,img:img("Laptop")},
+{name:"Phone",price:300,img:img("Phone")},
+{name:"Headset",price:80,img:img("Headset")},
+{name:"Watch",price:150,img:img("Watch")}
+].forEach(p=>store.add(p));
+}
+}
+
+tx.oncomplete=loadProducts;
+}
+
+// LOAD PRODUCTS
+function loadProducts(){
+
+products=[];
+let tx=db.transaction("products","readonly");
+tx.objectStore("products").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){
+products.push({...c.value,id:c.key});
+c.continue();
+}else renderProducts();
+}
+}
+
+// DISPLAY PRODUCTS
+function renderProducts(){
+
+productsDiv=document.getElementById("products");
+productSelect.innerHTML="";
+productsDiv.innerHTML="";
+
+products.forEach(p=>{
+productsDiv.innerHTML+=`
+<div class="card">
+<img src="${p.img}">
+<h4>${p.name}</h4>
+₹${p.price}
+</div>`;
+productSelect.innerHTML+=`<option value="${p.id}">${p.name}</option>`;
+});
+}
+
+// PLACE ORDER
+function placeOrder(){
+
+let pid=parseInt(productSelect.value);
+let q=parseInt(qty.value);
+let cust=customer.value;
+
+let prod=products.find(p=>p.id==pid);
+
+let tx=db.transaction("orders","readwrite");
+tx.objectStore("orders").add({
+customer:cust,
+productId:pid,
+price:prod.price,
+qty:q
+});
+
+tx.oncomplete=loadOrders;
+}
+
+// LOAD ORDERS
+function loadOrders(){
+
+orders=[];
+let tx=db.transaction("orders","readonly");
+tx.objectStore("orders").openCursor().onsuccess=e=>{
+let c=e.target.result;
+if(c){
+orders.push({...c.value,id:c.key});
+c.continue();
+}else renderOrders();
+}
+}
+
+// JOIN + SUBQUERIES
+function renderOrders(){
+
+let body="";
+let totals={};
+let spend={};
+
+orders.forEach(o=>{
+let p=products.find(x=>x.id==o.productId);
+let total=o.price*o.qty;
+
+body+=`
+<tr>
+<td>${o.customer}</td>
+<td>${p.name}</td>
+<td>${o.price}</td>
+<td>${o.qty}</td>
+<td>${total}</td>
+</tr>`;
+
+totals[o.id]=total;
+spend[o.customer]=(spend[o.customer]||0)+total;
+});
+
+// Highest order (subquery)
+let highest=Math.max(...Object.values(totals),0);
+
+// Most active customer (subquery)
+let active=Object.keys(spend).reduce((a,b)=>spend[a]>spend[b]?a:b,"");
+
+document.getElementById("orders").innerHTML=body;
+
+stats.innerHTML=`
+Highest Order Value: ₹${highest} |
+Most Active Customer: ${active||"-"}
+`;
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Student Registration System</title>
+
+<style>
+body{
+font-family:Arial;
+background:#f2f2f2;
+padding:30px;
+}
+
+.container{
+background:white;
+padding:20px;
+max-width:700px;
+margin:auto;
+border-radius:10px;
+box-shadow:0 0 10px gray;
+}
+
+h2{
+text-align:center;
+}
+
+input,select{
+width:100%;
+padding:10px;
+margin:8px 0;
+}
+
+button{
+padding:10px;
+background:#2196F3;
+color:white;
+border:none;
+width:100%;
+cursor:pointer;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#2196F3;
+color:white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Student Registration</h2>
+
+<form id="studentForm">
+
+<input type="text" id="name" placeholder="Student Name" required>
+
+<input type="email" id="email" placeholder="Email" required>
+
+<input type="date" id="dob" required>
+
+<select id="dept">
+<option>CSE</option>
+<option>ECE</option>
+<option>EEE</option>
+<option>MECH</option>
+</select>
+
+<input type="tel" id="phone" placeholder="Phone Number" required>
+
+<button type="submit">Register Student</button>
+
+</form>
+
+<h3>Registered Students</h3>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Name</th>
+<th>Email</th>
+<th>DOB</th>
+<th>Dept</th>
+<th>Phone</th>
+</tr>
+</thead>
+<tbody id="studentData"></tbody>
+</table>
+
+</div>
+
+<script>
+
+// Open Database
+let db;
+let request = indexedDB.open("StudentDB",1);
+
+request.onupgradeneeded = function(e){
+db = e.target.result;
+db.createObjectStore("students",{keyPath:"id",autoIncrement:true});
+};
+
+request.onsuccess = function(e){
+db = e.target.result;
+loadStudents();
+};
+
+// Insert Data
+document.getElementById("studentForm").addEventListener("submit",function(e){
+e.preventDefault();
+
+let student = {
+name:name.value,
+email:email.value,
+dob:dob.value,
+dept:dept.value,
+phone:phone.value
+};
+
+let tx = db.transaction("students","readwrite");
+let store = tx.objectStore("students");
+store.add(student);
+
+tx.oncomplete=function(){
+alert("Student Registered");
+studentForm.reset();
+loadStudents();
+};
+
+});
+
+// SELECT Data
+function loadStudents(){
+
+let tbody = document.getElementById("studentData");
+tbody.innerHTML="";
+
+let tx = db.transaction("students","readonly");
+let store = tx.objectStore("students");
+
+store.openCursor().onsuccess=function(e){
+let cursor = e.target.result;
+
+if(cursor){
+let s = cursor.value;
+
+tbody.innerHTML += `
+<tr>
+<td>${cursor.key}</td>
+<td>${s.name}</td>
+<td>${s.email}</td>
+<td>${s.dob}</td>
+<td>${s.dept}</td>
+<td>${s.phone}</td>
+</tr>
+`;
+
+cursor.continue();
+}
+}
+}
+
+</script>
+
+</body>
+</html>

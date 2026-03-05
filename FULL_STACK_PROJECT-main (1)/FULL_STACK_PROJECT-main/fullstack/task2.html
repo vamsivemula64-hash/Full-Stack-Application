@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Student Registration Dashboard</title>
+
+<style>
+body{
+font-family:Arial;
+background:#eef2f3;
+padding:20px;
+}
+
+.container{
+background:white;
+padding:20px;
+max-width:900px;
+margin:auto;
+border-radius:10px;
+box-shadow:0 0 10px gray;
+}
+
+input,select,button{
+padding:10px;
+margin:5px;
+}
+
+button{
+background:#2196F3;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:15px;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#2196F3;
+color:white;
+}
+
+.stats{
+display:flex;
+justify-content:space-around;
+margin-top:15px;
+font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2 align="center">Student Registration & Dashboard</h2>
+
+<h3>Register Student</h3>
+
+<input id="name" placeholder="Name">
+<input id="email" placeholder="Email">
+<input type="date" id="dob">
+
+<select id="dept">
+<option>CSE</option>
+<option>ECE</option>
+<option>EEE</option>
+<option>MECH</option>
+</select>
+
+<input id="phone" placeholder="Phone">
+
+<button onclick="addStudent()">Register</button>
+
+<hr>
+
+<h3>Dashboard</h3>
+
+Sort:
+<button onclick="sortByName()">Name</button>
+<button onclick="sortByDOB()">DOB</button>
+
+Filter:
+<select id="filterDept" onchange="loadStudents()">
+<option value="">All</option>
+<option>CSE</option>
+<option>ECE</option>
+<option>EEE</option>
+<option>MECH</option>
+</select>
+
+<div class="stats" id="stats"></div>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Name</th>
+<th>Email</th>
+<th>DOB</th>
+<th>Dept</th>
+<th>Phone</th>
+</tr>
+</thead>
+<tbody id="data"></tbody>
+</table>
+
+</div>
+
+<script>
+
+let db, students=[];
+
+let req = indexedDB.open("StudentDB",1);
+
+req.onupgradeneeded = e=>{
+db=e.target.result;
+db.createObjectStore("students",{keyPath:"id",autoIncrement:true});
+}
+
+req.onsuccess=e=>{
+db=e.target.result;
+loadStudents();
+}
+
+// ADD
+function addStudent(){
+
+let tx=db.transaction("students","readwrite");
+let store=tx.objectStore("students");
+
+store.add({
+name:name.value,
+email:email.value,
+dob:dob.value,
+dept:dept.value,
+phone:phone.value
+});
+
+tx.oncomplete=()=>{
+alert("Registered");
+loadStudents();
+}
+}
+
+// LOAD (SELECT)
+function loadStudents(){
+
+students=[];
+let tx=db.transaction("students","readonly");
+let store=tx.objectStore("students");
+
+store.openCursor().onsuccess=e=>{
+let cur=e.target.result;
+if(cur){
+students.push({...cur.value,id:cur.key});
+cur.continue();
+}else{
+render();
+}
+}
+}
+
+// RENDER
+function render(){
+
+let dept=document.getElementById("filterDept").value;
+let tbody=document.getElementById("data");
+tbody.innerHTML="";
+
+let counts={CSE:0,ECE:0,EEE:0,MECH:0};
+
+students.forEach(s=>{
+counts[s.dept]++;
+
+if(dept=="" || dept==s.dept){
+tbody.innerHTML+=`
+<tr>
+<td>${s.id}</td>
+<td>${s.name}</td>
+<td>${s.email}</td>
+<td>${s.dob}</td>
+<td>${s.dept}</td>
+<td>${s.phone}</td>
+</tr>`;
+}
+});
+
+stats.innerHTML=`
+CSE: ${counts.CSE} |
+ECE: ${counts.ECE} |
+EEE: ${counts.EEE} |
+MECH: ${counts.MECH}
+`;
+}
+
+// SORTING
+function sortByName(){
+students.sort((a,b)=>a.name.localeCompare(b.name));
+render();
+}
+
+function sortByDOB(){
+students.sort((a,b)=>new Date(a.dob)-new Date(b.dob));
+render();
+}
+
+</script>
+
+</body>
+</html>
